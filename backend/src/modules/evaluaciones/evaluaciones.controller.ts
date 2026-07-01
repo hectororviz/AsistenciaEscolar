@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Delete, Body, Param, Query } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query } from '@nestjs/common';
 import { PrismaService } from '../common/prisma.service';
 
 @Controller('evaluaciones')
@@ -18,6 +18,11 @@ export class EvaluacionesController {
     return this.prisma.evaluacion.create({
       data: { ...d, ...(d.fecha ? { fecha: new Date(d.fecha) } : {}) },
     });
+  }
+
+  @Put(':id')
+  update(@Param('id') id: string, @Body() d: { nombre?: string }) {
+    return this.prisma.evaluacion.update({ where: { id: +id }, data: d });
   }
 
   @Delete(':id')

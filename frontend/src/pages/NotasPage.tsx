@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../api/client';
-import { ArrowLeft, Plus, Trash2, Save } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Save, Edit } from 'lucide-react';
 
 export const NotasPage: React.FC = () => {
   const { cursoId, materiaId } = useParams<{ cursoId: string; materiaId: string }>();
@@ -22,6 +22,7 @@ export const NotasPage: React.FC = () => {
   });
 
   const [selectedEval, setSelectedEval] = useState<number>(0);
+  const [editingName, setEditingName] = useState<{ id: number; nombre: string } | null>(null);
   const { data: notasEval } = useQuery({
     queryKey: ['notas', selectedEval],
     queryFn: async () => (await apiClient.get(`/notas?evaluacionId=${selectedEval}`)).data as { alumnoId: number; valor: number }[],
@@ -35,6 +36,11 @@ export const NotasPage: React.FC = () => {
 
   const addEval = useMutation({
     mutationFn: async () => (await apiClient.post('/evaluaciones', { materiaId: +materiaId!, cursoId: +cursoId!, trimestre, nombre: `Eval ${trimestre}`, fecha: new Date().toISOString() })).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['evaluaciones'] }),
+  });
+
+  const updateEval = useMutation({
+    mutationFn: async ({ id, nombre }: { id: number; nombre: string }) => (await apiClient.put(`/evaluaciones/${id}`, { nombre })).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['evaluaciones'] }),
   });
 
@@ -63,15 +69,37 @@ export const NotasPage: React.FC = () => {
       {evaluaciones && evaluaciones.length > 0 && (
         <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
           {evaluaciones.map(ev => (
-            <button key={ev.id} onClick={() => setSelectedEval(ev.id)}
-              style={{
-                padding: '4px 12px', borderRadius: 16, border: '1px solid var(--color-border)',
-                background: selectedEval === ev.id ? 'var(--accent-color)' : 'transparent',
-                color: selectedEval === ev.id ? '#fff' : 'var(--color-text)',
-                cursor: 'pointer', fontSize: '0.8rem',
-              }}>
-              {ev.nombre} <Trash2 size={10} style={{ marginLeft: 4, cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); if (confirm('Eliminar?')) deleteEval.mutate(ev.id); }} />
-            </button>
+            <div key={ev.id} style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              {editingName?.id === ev.id ? (
+                <>
+                  <input className="login-input" style={{ padding: '2px 6px', fontSize: '0.75rem', width: 120, borderRadius: 12 }} value={editingName.nombre}
+                    onChange={e => setEditingName({ ...editingName, nombre: e.target.value })}
+                    onBlur={() => {
+                      if (editingName.nombre.trim()) updateEval.mutate({ id: editingName.id, nombre: editingName.nombre.trim() });
+                      setEditingName(null);
+                    }}
+                    onKeyDown={e => { if (e.key === 'Enter') { (e.target as HTMLInputElement).blur(); } }}
+                    autoFocus
+                  />
+                </>
+              ) : (
+                <button onClick={() => setSelectedEval(ev.id)}
+                  style={{
+                    padding: '4px 12px', borderRadius: 16, border: '1px solid var(--color-border)',
+                    background: selectedEval === ev.id ? 'var(--accent-color)' : 'transparent',
+                    color: selectedEval === ev.id ? '#fff' : 'var(--color-text)',
+                    cursor: 'pointer', fontSize: '0.8rem',
+                  }}>
+                  {ev.nombre}
+                </button>
+              )}
+              <button className="icon-button" style={{ width: 22, height: 22, opacity: 0.5 }} onClick={() => setEditingName({ id: ev.id, nombre: ev.nombre })} title="Renombrar">
+                <Edit size={10} />
+              </button>
+              <button className="icon-button" style={{ width: 22, height: 22, opacity: 0.5 }} onClick={() => { if (confirm('Eliminar?')) deleteEval.mutate(ev.id); }} title="Eliminar">
+                <Trash2 size={10} />
+              </button>
+            </div>
           ))}
         </div>
       )}
