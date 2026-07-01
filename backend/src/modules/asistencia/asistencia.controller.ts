@@ -235,27 +235,10 @@ export class AsistenciaController {
 
   @Put(':id/tipo')
   async cambiarTipo(@Param('id') id: string, @Body() d: { tipo: string }) {
-    const registro = await this.prisma.asistencia.update({
+    await this.prisma.asistencia.update({
       where: { id: +id },
       data: { tipo: d.tipo },
     });
-
-    // Recalcular Entrada/Salida para este persona+día
-    if (registro.personaId) {
-      const dia = registro.fecha.toISOString().slice(0, 10);
-      const inicio = new Date(dia + 'T00:00:00');
-      const fin = new Date(dia + 'T23:59:59');
-      const registros = await this.prisma.asistencia.findMany({
-        where: { personaId: registro.personaId, fecha: { gte: inicio, lte: fin } },
-        orderBy: { fecha: 'asc' },
-      });
-      for (let i = 0; i < registros.length; i++) {
-        const esperado = i % 2 === 0 ? 'Entrada' : 'Salida';
-        if (registros[i].tipo !== esperado) {
-          await this.prisma.asistencia.update({ where: { id: registros[i].id }, data: { tipo: esperado } });
-        }
-      }
-    }
 
     return this.prisma.asistencia.findUnique({ where: { id: +id }, include: { persona: { select: { id: true, nombre: true } } } });
   }
