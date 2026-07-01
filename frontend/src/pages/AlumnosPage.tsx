@@ -181,6 +181,7 @@ export const CursoAlumnosPage: React.FC = () => {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
+  const [selected, setSelected] = useState<Set<number>>(new Set());
 
   const { data: cursoAlumnos } = useQuery({
     queryKey: ['curso-alumnos', cursoId],
@@ -192,9 +193,9 @@ export const CursoAlumnosPage: React.FC = () => {
     queryFn: async () => (await apiClient.get<Alumno[]>('/alumnos')).data,
   });
 
-  const addAlumno = useMutation({
-    mutationFn: async (alumnoId: number) => (await apiClient.post(`/cursos/${cursoId}/alumnos`, { alumnoId })).data,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['curso-alumnos', cursoId] }),
+  const addAlumnos = useMutation({
+    mutationFn: async (alumnoIds: number[]) => (await apiClient.post(`/cursos/${cursoId}/alumnos`, { alumnoIds })).data,
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['curso-alumnos', cursoId] }); setSelected(new Set()); },
   });
 
   const removeAlumno = useMutation({
@@ -203,11 +204,14 @@ export const CursoAlumnosPage: React.FC = () => {
   });
 
   const inscriptos = new Set(cursoAlumnos?.map(ca => ca.alumno.id) || []);
-  const disponibles = todosAlumnos?.filter(a => a.activo && !inscriptos.has(a.id) && 
+  const disponibles = todosAlumnos?.filter(a => a.activo && !inscriptos.has(a.id) &&
     (search === '' || `${a.apellido} ${a.nombre}`.toLowerCase().includes(search.toLowerCase()))) || [];
 
+  const toggleSelect = (id: number) => { setSelected(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; }); };
+  const toggleAll = () => { if (selected.size === disponibles.length) setSelected(new Set()); else setSelected(new Set(disponibles.map(a => a.id))); };
+
   return (
-    <div className="page-content" style={{ maxWidth: 800 }}>
+    <div className="page-content" style={{ maxWidth: 1000 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <button className="icon-button" onClick={() => navigate('/admin/cursos')}><ArrowLeft size={18} /></button>
@@ -218,28 +222,63 @@ export const CursoAlumnosPage: React.FC = () => {
       <h3 style={{ fontSize: '0.9rem', marginBottom: 8 }}>Inscriptos ({inscriptos.size})</h3>
       <div className="sales-table-wrapper" style={{ marginBottom: 24 }}>
         <div className="sales-table">
-          {cursoAlumnos?.map(ca => (
-            <div key={ca.id} className="sales-table-row" style={{ fontSize: '0.82rem' }}>
-              <span className="col-team"><User size={13} style={{ marginRight: 4 }} />{ca.alumno.apellido}, {ca.alumno.nombre}</span>
-              <span style={{ flex: '0 0 100px', padding: '3px 8px' }}>{ca.alumno.dni || '-'}</span>
-              <span className="col-action">
-                <button className="icon-button" style={{ width: 28, height: 26 }} onClick={() => { if (confirm('Quitar alumno?')) removeAlumno.mutate(ca.alumno.id); }}><X size={12} /></button>
-              </span>
-            </div>
-          ))}
+          <div className="sales-table-head" style={{ fontSize: '0.75rem' }}>
+            <span className="col-team">Alumno</span>
+            <span style={{ flex: '0 0 100px', padding: '4px 8px', borderBottom: '2px solid var(--color-border)' }}>DNI</span>
+            <span style={{ flex: '0 0 120px', padding: '4px 8px', borderBottom: '2px solid var(--color-border)' }}>F. Nacimiento</span>
+            <span style={{ flex: '0 0 50px', padding: '4px 8px', borderBottom: '2px solid var(--color-border)' }}></span>
+          </div>
+          {(!cursoAlumnos || cursoAlumnos.length === 0) ? (
+            <div className="sales-table-row"><span style={{ flex: 1, textAlign: 'center', padding: 8, color: 'var(--color-text-muted)', fontSize: '0.8rem' }}>Sin alumnos inscriptos</span></div>
+          ) : (
+            cursoAlumnos.map(ca => (
+              <div key={ca.id} className="sales-table-row" style={{ fontSize: '0.82rem' }}>
+                <span className="col-team"><User size={13} style={{ marginRight: 4 }} />{ca.alumno.apellido}, {ca.alumno.nombre}</span>
+                <span style={{ flex: '0 0 100px', padding: '3px 8px' }}>{ca.alumno.dni || '-'}</span>
+                <span style={{ flex: '0 0 120px', padding: '3px 8px' }}>{ca.alumno.fechaNacimiento ? new Date(ca.alumno.fechaNacimiento).toLocaleDateString('es-AR') : '-'}</span>
+                <span style={{ flex: '0 0 50px', padding: '3px 8px', textAlign: 'center' }}>
+                  <button className="icon-button" style={{ width: 28, height: 26 }} onClick={() => { if (confirm('Quitar alumno?')) removeAlumno.mutate(ca.alumno.id); }}><X size={12} /></button>
+                </span>
+              </div>
+            ))
+          )}
         </div>
       </div>
 
-      <h3 style={{ fontSize: '0.9rem', marginBottom: 8 }}>Agregar alumno</h3>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <h3 style={{ fontSize: '0.9rem', margin: 0 }}>Agregar alumnos</h3>
+        {selected.size > 0 && (
+          <button className="login-submit" style={{ width: 'auto', padding: '0.35rem 1rem', margin: 0, fontSize: '0.8rem' }}
+            onClick={() => addAlumnos.mutate(Array.from(selected))}>
+            Agregar {selected.size} seleccionados
+          </button>
+        )}
+      </div>
       <input className="login-input" style={{ marginBottom: 8, fontSize: '0.85rem' }} placeholder="Buscar alumno..." value={search} onChange={e => setSearch(e.target.value)} />
-      <div className="sales-table-wrapper" style={{ maxHeight: 300, overflowY: 'auto' }}>
+      <div className="sales-table-wrapper" style={{ maxHeight: 400, overflowY: 'auto' }}>
         <div className="sales-table">
-          {disponibles?.slice(0, 20).map(a => (
-            <div key={a.id} className="sales-table-row" style={{ fontSize: '0.82rem', cursor: 'pointer' }} onClick={() => addAlumno.mutate(a.id)}>
-              <span className="col-team"><Plus size={13} style={{ marginRight: 4 }} />{a.apellido}, {a.nombre}</span>
-              <span style={{ flex: '0 0 100px', padding: '3px 8px' }}>{a.dni || '-'}</span>
-            </div>
-          ))}
+          <div className="sales-table-head" style={{ fontSize: '0.75rem' }}>
+            <span style={{ flex: '0 0 40px', padding: '4px 8px', borderBottom: '2px solid var(--color-border)' }}>
+              <input type="checkbox" checked={selected.size === disponibles.length && disponibles.length > 0} onChange={toggleAll} />
+            </span>
+            <span className="col-team">Alumno</span>
+            <span style={{ flex: '0 0 100px', padding: '4px 8px', borderBottom: '2px solid var(--color-border)' }}>DNI</span>
+            <span style={{ flex: '0 0 120px', padding: '4px 8px', borderBottom: '2px solid var(--color-border)' }}>F. Nacimiento</span>
+          </div>
+          {disponibles.length === 0 ? (
+            <div className="sales-table-row"><span style={{ flex: 1, textAlign: 'center', padding: 8, color: 'var(--color-text-muted)', fontSize: '0.8rem' }}>Sin resultados</span></div>
+          ) : (
+            disponibles.map(a => (
+              <div key={a.id} className="sales-table-row" style={{ fontSize: '0.82rem', cursor: 'pointer', background: selected.has(a.id) ? 'var(--color-accent-ring)' : 'transparent' }} onClick={() => toggleSelect(a.id)}>
+                <span style={{ flex: '0 0 40px', padding: '3px 8px', textAlign: 'center' }}>
+                  <input type="checkbox" checked={selected.has(a.id)} onChange={() => toggleSelect(a.id)} />
+                </span>
+                <span className="col-team"><User size={13} style={{ marginRight: 4 }} />{a.apellido}, {a.nombre}</span>
+                <span style={{ flex: '0 0 100px', padding: '3px 8px' }}>{a.dni || '-'}</span>
+                <span style={{ flex: '0 0 120px', padding: '3px 8px' }}>{a.fechaNacimiento ? new Date(a.fechaNacimiento).toLocaleDateString('es-AR') : '-'}</span>
+              </div>
+            ))
+          )}
         </div>
       </div>
     </div>
