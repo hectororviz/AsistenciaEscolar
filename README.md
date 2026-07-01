@@ -1,6 +1,6 @@
 # Asistencia Escolar
 
-Sistema web para gestión de control de accesos y asistencia escolar. Se integra con dispositivos Dahua (ASI3214A-W) para obtener registros de entrada/salida de personal, gestionar cursos, horarios y asignación de docentes.
+Sistema web para gestión integral de una escuela: control de accesos Dahua, asistencia de personal y alumnos, gestión de cursos, horarios, asignación de docentes, notas y más.
 
 ---
 
@@ -10,15 +10,16 @@ Sistema web para gestión de control de accesos y asistencia escolar. Se integra
 3. [Requisitos de red](#requisitos-de-red)
 4. [Instalación y despliegue](#instalación-y-despliegue)
 5. [Variables de entorno](#variables-de-entorno)
-6. [Base de datos — Modelo de datos](#base-de-datos--modelo-de-datos)
+6. [Base de datos](#base-de-datos)
 7. [API — Endpoints](#api--endpoints)
-8. [Frontend — Estructura y páginas](#frontend--estructura-y-páginas)
-9. [Autenticación](#autenticación)
-10. [Flujo de sincronización con Dahua](#flujo-de-sincronización-con-dahua)
-11. [Webhook de eventos (push)](#webhook-de-eventos-push)
-12. [Dashboard de presencia](#dashboard-de-presencia)
-13. [Desarrollo local](#desarrollo-local)
-14. [Solución de problemas](#solución-de-problemas)
+8. [Frontend — Páginas y roles](#frontend--páginas-y-roles)
+9. [Autenticación y roles](#autenticación-y-roles)
+10. [Dahua — Sincronización y webhook](#dahua--sincronización-y-webhook)
+11. [Dashboard de presencia](#dashboard-de-presencia)
+12. [Notas y evaluaciones](#notas-y-evaluaciones)
+13. [Asistencia de alumnos](#asistencia-de-alumnos)
+14. [Import/Export alumnos](#importexport-alumnos)
+15. [Desarrollo local](#desarrollo-local)
 
 ---
 
@@ -35,6 +36,7 @@ Sistema web para gestión de control de accesos y asistencia escolar. Se integra
 | Iconos | lucide-react |
 | Reverse proxy | Caddy (caddy-docker-proxy) |
 | Infraestructura | Docker Compose (2 servicios: db + app) |
+| Excel | SheetJS (xlsx) |
 
 ---
 
@@ -42,16 +44,15 @@ Sistema web para gestión de control de accesos y asistencia escolar. Se integra
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                         Internet / Caddy                         │
-│                   https://ima.mposw.com.ar                       │
+│                    https://ima.mposw.com.ar (Caddy)              │
 └─────────────────────────┬───────────────────────────────────────┘
                           │ reverse proxy :3000
 ┌─────────────────────────▼───────────────────────────────────────┐
-│                    dahua-app (NestJS + React)                    │
+│                    dahua-app (NestJS + React SPA)                │
 │                                                                  │
 │  ┌─────────────────┐     ┌──────────────────────┐               │
 │  │   NestJS :3000   │────▶│   PostgreSQL :5432   │               │
-│  │  API + SPA       │     │   (db service)        │               │
+│  │  API REST + SPA  │     │   (db service)        │               │
 │  └────────┬─────────┘     └──────────────────────┘               │
 │           │                                                      │
 │  ┌────────▼─────────┐                                           │
@@ -61,418 +62,261 @@ Sistema web para gestión de control de accesos y asistencia escolar. Se integra
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-**Dos redes Docker externas:**
-- `caddy_net` — comunicación con Caddy reverse proxy
-- `vpn_net` — túnel OpenVPN hacia el Dahua (10.20.20.0/24)
-
-**Ruta estática al iniciar** (`docker-entrypoint.sh`):
-```bash
-ip route add 10.10.10.0/24 via 10.20.20.2 dev <interfaz_vpn_net>
-```
-
----
-
-## Requisitos de red
-
-- **Red externa `caddy_net`**: creada por caddy-docker-proxy
-- **Red externa `vpn_net`**: creada por el contenedor openvpn-server
-- **IP del Dahua**: `10.10.10.100:80`
-- **CAP_NET_ADMIN**: requerido para agregar la ruta estática
+Dos redes Docker externas: `caddy_net` (reverse proxy) y `vpn_net` (túnel OpenVPN hacia el Dahua).
 
 ---
 
 ## Instalación y despliegue
 
 ```bash
-# 1. Clonar repositorio
-git clone <repo-url> asistenciaEscolar && cd asistenciaEscolar
-
-# 2. Configurar variables de entorno
-cp .env.example .env
-# Editar .env con credenciales reales
-
-# 3. Construir e iniciar
-docker compose up -d --build
-
-# 4. Verificar
-docker compose ps
-docker logs dahua-app
-```
-
-**IMPORTANTE**: Nunca usar `docker compose down -v` en producción (borra la base de datos). Para actualizar:
-
-```bash
+cp .env.example .env        # Editar con credenciales reales
 docker compose up -d --build
 ```
+
+**Nunca usar `docker compose down -v`** en producción (borra el volumen de la DB). Para actualizar: `docker compose up -d --build`.
 
 ---
 
 ## Variables de entorno
 
-### `.env`
-
 | Variable | Descripción | Default |
 |---|---|---|
-| `DAHUA_HOST` | IP del dispositivo Dahua | `10.10.10.100` |
-| `DAHUA_USER` | Usuario HTTP Digest Auth del Dahua | `admin` |
-| `DAHUA_PASSWORD` | Contraseña del Dahua | (obligatorio) |
-| `POSTGRES_USER` | Usuario PostgreSQL | `asistencia` |
-| `POSTGRES_PASSWORD` | Contraseña PostgreSQL | `asistencia123` |
-| `POSTGRES_DB` | Nombre base de datos | `asistencia` |
-| `DATABASE_URL` | URL conexión Prisma | `postgresql://asistencia:asistencia123@db:5432/asistencia` |
-| `JWT_SECRET` | Secreto para tokens JWT | `asistencia-escolar-secret` |
-| `APP_NAME` | Nombre de la app (login/sidebar) | `Asistencia Escolar` |
-| `APP_LOGO_URL` | URL del logo | (vacío → iniciales) |
-| `APP_ACCENT_COLOR` | Color accent | `#f59e0b` |
-| `APP_CLUB_NAME` | Nombre del colegio | (vacío) |
-| `CADDY_DOMAIN` | Dominio público | `dahua-dev.tudominio.com` |
-| `RUN_SEED` | Ejecutar seed al iniciar (`0`/`1`) | `0` |
-| `PORT` | Puerto de la app | `3000` |
+| `DAHUA_HOST` | IP del Dahua | `10.10.10.100` |
+| `DAHUA_USER` / `DAHUA_PASSWORD` | HTTP Digest Auth | - |
+| `POSTGRES_USER/PASSWORD/DB` | Credenciales PostgreSQL | `asistencia` |
+| `JWT_SECRET` | Firma de tokens JWT | - |
+| `APP_NAME` / `APP_LOGO_URL` / `APP_ACCENT_COLOR` / `APP_CLUB_NAME` | Branding | - |
+| `CADDY_DOMAIN` | Dominio público Caddy | - |
+| `RUN_SEED` | Ejecutar seed al iniciar | `0` |
 
 ---
 
-## Base de datos — Modelo de datos
+## Base de datos
 
-### Diagrama entidad-relación
-
-```
-CicloLectivo
-  └── Curso ──── Nivel ──── Turno
-       │           │           └── HorarioNivelTurno ─── ModuloHorario
-       │           │
-       │           └── Anio ── Division
-       │
-       └── Asignacion ─── ModuloHorario
-              │                │
-              ├── Materia      │
-              └── Persona      │
-                   │           │
-                   ├── TipoPersonal
-                   ├── PersonaMateria
-                   └── Asistencia
-```
-
-### Tablas principales
+### Tablas (20 modelos)
 
 | Tabla | Descripción |
 |---|---|
-| `CicloLectivo` | Año escolar (ej: 2026). Uno activo a la vez. |
-| `Nivel` | Inicial, Primaria, Secundaria. Define `duracionModuloMin` y `cantidadAnios`. |
-| `Turno` | Mañana, Tarde. Pertenece a un Nivel. Define `horaInicio` / `horaFin`. |
-| `Anio` | 1°, 2°, ... Pertenece a Nivel + Turno. |
-| `Division` | A, B, Rosa, ... Pertenece a un Año. |
-| `Curso` | Entidad completa: CicloLectivo + Nivel + Turno + Año + División. Ej: "Primaria: 3° B Mañana (2026)". |
-| `HorarioNivelTurno` | Configuración de módulos para un Nivel+Turno (compartido entre cursos). |
-| `ModuloHorario` | Bloque horario: orden, horaInicio, horaFin, duración. |
-| `TipoPersonal` | Docente, Directivo, Auxiliar, Administrativo. |
-| `Materia` | Materia escolar (Matemática, Lengua, etc.). |
-| `Persona` | Personal importado del Dahua. Vinculado por `userId`. |
-| `PersonaMateria` | Materias que dicta un docente. |
-| `Asignacion` | Materia + Docente asignados a un Curso en un Módulo+Día. |
-| `Asistencia` | Registros de entrada/salida del Dahua. `@@unique([userId, fecha])`. |
+| `CicloLectivo`, `Nivel`, `Turno`, `Anio`, `Division`, `Curso` | Estructura escolar |
+| `HorarioNivelTurno`, `ModuloHorario` | Horarios y módulos |
+| `TipoPersonal`, `Materia`, `Persona`, `PersonaMateria` | Personal y materias |
+| `Asignacion` | Docente + Materia asignados a un Curso×Módulo×Día |
+| `Asistencia` | Registros entrada/salida del Dahua (`@@unique([userId, fecha])`) |
+| `User` | Usuarios del sistema (ADMIN/DOCENTE, vinculado a Persona) |
+| `Alumno`, `CursoAlumno` | Alumnos y su asignación a cursos |
+| `Evaluacion`, `Nota`, `NotaTrimestre` | Evaluaciones, calificaciones y cierre trimestral |
+| `AsistenciaAlumno` | Asistencia manual de alumnos (`@@unique([alumnoId, cursoId, fecha])`) |
 
 ---
 
 ## API — Endpoints
 
-**Prefijo global**: `/api`
+**Prefijo**: `/api` | **Auth**: JWT Bearer (excepto `/auth/login`, `/settings`, `/dahua/event`)
 
-**Autenticación**: JWT Bearer token (excepto `/auth/login`, `/settings`, `/dahua/event`).
-
-### Auth
-| Método | Ruta | Auth | Descripción |
-|---|---|---|---|
-| POST | `/auth/login` | No | Login `{ username, password }` → `{ accessToken, user }` |
-
-### Settings
-| Método | Ruta | Auth | Descripción |
-|---|---|---|---|
-| GET | `/settings` | No | Config de branding: `appName, logoUrl, accentColor` |
-
-### Ciclos Lectivos
+### Auth & Settings
 | Método | Ruta | Descripción |
 |---|---|---|
-| GET | `/ciclos-lectivos` | Lista (orden año desc) |
-| GET | `/ciclos-lectivos/:id` | Uno por ID |
-| POST | `/ciclos-lectivos` | Crear `{ anio, nombre?, fechaInicio, fechaFin }` |
-| PUT | `/ciclos-lectivos/:id` | Actualizar |
-| DELETE | `/ciclos-lectivos/:id` | Eliminar |
+| POST | `/auth/login` | Login → `{ accessToken, user: { id, username, role, persona } }` |
+| GET | `/settings` | Branding público |
 
-### Niveles
+### Estructura escolar
 | Método | Ruta | Descripción |
 |---|---|---|
-| GET | `/niveles` | Lista |
-| POST | `/niveles` | Crear `{ nombre, duracionModuloMin?, cantidadAnios? }` |
-| PUT | `/niveles/:id` | Actualizar |
-| DELETE | `/niveles/:id` | Eliminar |
+| GET/POST/PUT/DELETE | `/ciclos-lectivos` | CRUD ciclos lectivos |
+| GET/POST/PUT/DELETE | `/niveles` | CRUD niveles (con `cantidadAnios`, `duracionModuloMin`) |
+| GET/POST/PUT/DELETE | `/turnos?nivelId=` | CRUD turnos |
+| GET/POST/PUT/DELETE | `/anios?nivelId=&turnoId=` | CRUD años |
+| GET/POST/PUT/DELETE | `/divisiones?anioId=` | CRUD divisiones |
 
-### Turnos
+### Cursos, Horarios, Asignaciones
 | Método | Ruta | Descripción |
 |---|---|---|
-| GET | `/turnos?nivelId=` | Lista (filtrable por nivel) |
-| POST | `/turnos` | Crear `{ nombre, horaInicio, horaFin, nivelId }` |
-| PUT | `/turnos/:id` | Actualizar |
-| DELETE | `/turnos/:id` | Eliminar |
-
-### Años
-| Método | Ruta | Descripción |
-|---|---|---|
-| GET | `/anios?nivelId=&turnoId=` | Lista (filtrable) |
-| POST | `/anios` | Crear `{ nombre, orden, nivelId, turnoId }` |
-| PUT | `/anios/:id` | Actualizar |
-| DELETE | `/anios/:id` | Eliminar |
-
-### Divisiones
-| Método | Ruta | Descripción |
-|---|---|---|
-| GET | `/divisiones?anioId=` | Lista (filtrable) |
-| POST | `/divisiones` | Crear `{ nombre, anioId }` |
-| PUT | `/divisiones/:id` | Actualizar |
-| DELETE | `/divisiones/:id` | Eliminar |
-
-### Cursos
-| Método | Ruta | Descripción |
-|---|---|---|
-| GET | `/cursos?cicloLectivoId=` | Lista por ciclo |
+| GET | `/cursos?cicloLectivoId=` | Listar cursos |
 | GET | `/cursos/activo` | Cursos del ciclo activo |
-| POST | `/cursos/crear` | Crear en lote `{ cicloLectivoId, nivelId, turnoId, divisiones }` |
-| DELETE | `/cursos/:id` | Eliminar |
+| POST | `/cursos/crear` | Crear cursos en lote `{ cicloLectivoId, nivelId, turnoId, divisiones }` |
+| DELETE | `/cursos/:id` | Eliminar curso |
+| GET/POST/DELETE | `/cursos/:cursoId/alumnos` | Alumnos del curso (agregar en lote `{ alumnoIds: [] }`) |
+| GET | `/horarios?nivelId=&turnoId=` | Horarios configurados |
+| POST | `/horarios` | Crear horario |
+| PUT | `/horarios/:id/modulos` | Guardar módulos |
+| POST | `/horarios/:id/generar-default` | Auto-generar módulos |
+| GET/PUT | `/asignaciones/curso/:cursoId` | Asignar docentes a módulos×días |
 
-### Horarios
+### Personal, Materias
 | Método | Ruta | Descripción |
 |---|---|---|
-| GET | `/horarios?nivelId=&turnoId=` | Lista de horarios configurados |
-| POST | `/horarios` | Crear horario para nivel+turno `{ nivelId, turnoId }` |
-| PUT | `/horarios/:id/modulos` | Reemplazar módulos del horario |
-| POST | `/horarios/:id/generar-default` | Auto-generar módulos según `duracionModuloMin` |
+| GET/POST/PUT/DELETE | `/tipos-personal` | CRUD tipos (Docente, Administrativo, etc.) |
+| GET/POST/PUT/DELETE | `/materias` | CRUD materias |
+| GET | `/personas` | Lista personas |
+| GET/PUT | `/personas/:id` | Ver/editar persona (incluye `horarioInicio/Fin`, `materiaIds`) |
+| POST | `/personas/sincronizar` | Sync desde Dahua |
 
-### Materias
+### Asistencia (personal)
 | Método | Ruta | Descripción |
 |---|---|---|
-| GET | `/materias` | Lista |
-| POST | `/materias` | Crear `{ nombre }` |
-| PUT | `/materias/:id` | Actualizar |
-| DELETE | `/materias/:id` | Eliminar |
+| GET | `/asistencia?personaId=&desde=&hasta=&page=&limit=` | Lista paginada (50 p/pág) |
+| GET | `/asistencia/dashboard?fecha=` | Dashboard presencia |
+| POST | `/asistencia/sincronizar` | Sync paginado (StartTime + count=500) |
+| POST | `/dahua/event` | Webhook Dahua (multipart/JSON) |
 
-### Tipos de Personal
+### Usuarios del sistema
 | Método | Ruta | Descripción |
 |---|---|---|
-| GET | `/tipos-personal` | Lista |
-| POST | `/tipos-personal` | Crear `{ nombre }` |
-| PUT | `/tipos-personal/:id` | Actualizar |
-| DELETE | `/tipos-personal/:id` | Eliminar |
+| GET | `/users` | Lista (incluye persona vinculada) |
+| POST | `/users` | Crear `{ username, password, personaId? }` |
+| PUT | `/users/:id` | Cambiar contraseña o estado |
+| DELETE | `/users/:id` | Eliminar |
+| GET | `/me/cursos?personaId=` | Cursos+materias de un docente |
 
-### Personas
+### Alumnos
 | Método | Ruta | Descripción |
 |---|---|---|
-| GET | `/personas` | Lista (incluye tipo y materias) |
-| GET | `/personas/:id` | Una persona |
-| PUT | `/personas/:id` | Actualizar `{ habilitado, fechaNacimiento, dni, direccion, telefono, email, notas, tipoPersonalId, materiaIds }` |
-| POST | `/personas/sincronizar` | Sincronizar desde Dahua (crea personas nuevas) |
+| GET | `/alumnos?search=` | Lista con búsqueda |
+| GET/POST/PUT/DELETE | `/alumnos/:id` | CRUD (con `contacto1Nombre/Tel`, etc.) |
 
-### Asignaciones (docentes x curso)
+### Evaluaciones y Notas
 | Método | Ruta | Descripción |
 |---|---|---|
-| GET | `/asignaciones/curso/:cursoId` | Datos de asignación: curso, módulos, materias, docentes, ocupación |
-| PUT | `/asignaciones/curso/:cursoId` | Guardar `{ asignaciones: [...] }` |
+| GET | `/evaluaciones?cursoId=&materiaId=&trimestre=` | Listar evaluaciones |
+| POST | `/evaluaciones` | Crear `{ materiaId, cursoId, trimestre, nombre }` |
+| PUT | `/evaluaciones/:id` | Renombrar |
+| DELETE | `/evaluaciones/:id` | Eliminar |
+| GET | `/notas?evaluacionId=` | Notas de una evaluación |
+| POST | `/notas/batch` | Guardar notas en lote `{ evaluacionId, notas: [{ alumnoId, valor }] }` |
+| GET | `/notas-trimestre?cursoId=&materiaId=` | Notas trimestrales |
+| POST | `/notas-trimestre/cerrar` | Cerrar trimestre `{ materiaId, cursoId, trimestre, notas: [{ alumnoId, valor }] }` |
 
-### Asistencia
+### Asistencia alumnos
 | Método | Ruta | Descripción |
 |---|---|---|
-| GET | `/asistencia?personaId=&desde=&hasta=&page=&limit=` | Lista paginada (50 por página) |
-| GET | `/asistencia/dashboard?fecha=` | Dashboard de presencia para una fecha |
-| POST | `/asistencia/sincronizar` | Sync manual desde Dahua (paginado por `StartTime`) |
-
-### Dahua Webhook
-| Método | Ruta | Auth | Descripción |
-|---|---|---|---|
-| POST | `/dahua/event` | No | Recibe eventos push del Dahua (multipart/form-data o JSON) |
+| GET | `/asistencia-alumnos?cursoId=&mes=&anio=` | Presentes del mes |
+| PUT | `/asistencia-alumnos` | Guardar `{ cursoId, registros: [{ alumnoId, fecha }] }` |
 
 ---
 
-## Frontend — Estructura y páginas
+## Frontend — Páginas y roles
 
-### Sidebar
+### ADMIN
+
 ```
 👥 Personal
    ├── Dashboard           → /admin/dashboard
    ├── Personas            → /admin/personal/personas
    └── Asistencia          → /admin/asistencia
+👤 Alumnos
+   └── Alumnos             → /admin/alumnos
 📚 Cursos                  → /admin/cursos
 ⚙️ Sistema
    └── Usuarios            → /admin/usuarios
 ```
 
-### Páginas
+### DOCENTE
 
-| Ruta | Componente | Descripción |
-|---|---|---|
-| `/login` | `LoginPage` | Login con logo configurable |
-| `/admin/cursos` | `CursosPage` | **3 tabs**: Cursos, Ciclos Lectivos, Configurar |
-| `/admin/cursos/:id/asignacion` | `AsignacionPage` | Grilla módulos × días para asignar docentes |
-| `/admin/horarios/:nivelId/:turnoId` | `HorarioEditorPage` | Editor visual de horarios (drag & drop) |
-| `/admin/dashboard` | `DashboardPage` | Presencia en tiempo real: timeline 06:00-19:00 |
-| `/admin/personal/personas` | `PersonalPage` | **2 tabs**: Personas, Configuración |
-| `/admin/asistencia` | `AsistenciaPage` | Registros con filtros fecha/persona y paginación |
-| `/admin/usuarios` | `SystemUsersPage` | Usuarios del sistema |
+```
+📚 Mis Cursos              → /docente/mis-cursos
+```
 
-### Pestañas de CursosPage
+### Páginas principales
 
-| Tab | Descripción |
+| Ruta | Descripción |
 |---|---|
-| **Cursos** | Tablas agrupadas por Nivel con bloques de colores pastel. Cada fila muestra Año, División, Turno. Botón 📋 para asignar docentes. |
-| **Ciclos Lectivos** | CRUD de ciclos. Botón 👁️ para ver detalle con cursos. Modal de creación carga Nivel+Turno y genera cursos con años (1° a N°) + divisiones configurables. |
-| **Configurar** | ABM de Niveles (con `cantidadAnios` y `duracionModuloMin`) y Turnos (con 🕐 para editar horarios). |
-
-### Pestañas de PersonalPage
-
-| Tab | Descripción |
-|---|---|
-| **Personas** | Tabla: #, ID, Nombre, Tipo, Estado. Acciones: 👁️ ver, ✏️ editar, 📊 asistencia. |
-| **Configuración** | ABM Tipos de Personal + ABM Materias + botón "Sincronizar con Dahua". |
-
-### Editor visual de horarios
-
-- Timeline de `horaInicio` a `horaFin` del turno
-- Bloques arrastrables (mover) y redimensionables (bordes) con snap a 5 minutos
-- Los espacios entre módulos son recreos (se muestran en texto gris)
-- Botón "Auto-generar": crea módulos según `duracionModuloMin` del nivel
-- Botón "Guardar" → feedback ✓ y redirección
+| `/admin/cursos` | **3 tabs**: Cursos (tablas por nivel), Ciclos Lectivos (CRUD + creación de cursos), Configurar (Niveles + Turnos) |
+| `/admin/cursos/:id/alumnos` | Alumnos del curso: inscriptos + checkboxes para agregar |
+| `/admin/cursos/:id/asignacion` | Grilla módulos × días para asignar docente+materia |
+| `/admin/horarios/:nivelId/:turnoId` | Editor visual drag & drop de módulos (snap 5min) |
+| `/admin/dashboard` | Timeline 06-19h: gris = horario esperado, naranja = presencia real. Dos secciones: Docentes y No Docentes |
+| `/admin/personal/personas` | **2 tabs**: Personas (filtros: búsqueda, tipo, ver inactivos) + Configuración (Tipos, Materias, Sincronizar) |
+| `/admin/asistencia` | Registros con filtros fecha/persona, paginación 50 p/pág, colores por día |
+| `/admin/alumnos` | Lista con búsqueda, import/export XLSX, dar de baja, CRUD con 3 contactos |
+| `/admin/usuarios` | Usuarios del sistema + sección "Docentes sin cuenta" (crear usuario) |
+| `/docente/mis-cursos` | Cursos+materias del docente. Botones para notas y asistencia |
+| `/docente/notas/:cursoId/:materiaId` | Grilla de evaluaciones × alumnos. Renombrar evaluaciones inline. Cerrar trimestre |
+| `/docente/asistencia/:cursoId` | Grilla mensual: checkboxes por día + fila "Marcar todos" + navegación entre meses |
 
 ---
 
-## Autenticación
+## Autenticación y roles
 
-- **Login**: `POST /api/auth/login` con `{ username: "admin", password: "123456" }`
-- **JWT**: expira en 8 horas
-- **Frontend**: token almacenado en `localStorage.authToken`. Axios interceptor agrega `Authorization: Bearer <token>` automáticamente.
+- **Login**: `POST /api/auth/login` con `{ username, password }`
+- **Usuario admin**: creado por seed (`admin / 123456`)
+- **Usuarios docentes**: el admin los crea desde Sistema → Usuarios → "Docentes sin cuenta"
+- **JWT**: expira en 8h, incluye `role` y `personaId`
+- **Role guards**: `AdminRoute` → solo ADMIN, `DocenteRoute` → solo DOCENTE
 - **401**: redirección a `/login` + limpieza de localStorage
 
 ---
 
-## Flujo de sincronización con Dahua
+## Dahua — Sincronización y webhook
 
-### 1. Personas
+### Sync de personas
+`POST /api/personas/sincronizar` → consulta `AccessControlCard`. Crea `Persona` con tipo `Administrativo` por defecto.
 
-`POST /api/personas/sincronizar` consulta `AccessControlCard` del Dahua:
-
+### Sync de asistencia (paginado)
 ```
-GET /cgi-bin/recordFinder.cgi?action=find&name=AccessControlCard&condition=
+GET /cgi-bin/recordFinder.cgi?action=find&name=AccessControlCardRec&StartTime=<ts>&count=500
 ```
+- Paginación por `StartTime` + `count=500`. Si `found == 500`, continúa.
+- Deduplica por `(userId, fecha)`.
+- Recalcula Entrada/Salida por `(personaId, día)`: alterna (1°=Entrada, 2°=Salida).
+- Cron automático cada 5 minutos.
 
-- Por cada `UserID + CardName`, si no existe `Persona`, la crea con tipo `Administrativo`
-- HTTP Digest Auth automática
-
-### 2. Asistencia (paginada)
-
-`POST /api/asistencia/sincronizar` consulta `AccessControlCardRec` con paginación:
-
-```
-GET /cgi-bin/recordFinder.cgi?action=find&name=AccessControlCardRec&StartTime=<ultimoTs>&count=500
-```
-
-**Algoritmo:**
-1. Obtiene el último `fecha` registrado en DB → lo usa como `StartTime`
-2. Consulta con `count=500`
-3. Si `found == 500`, toma el `CreateTime` del último registro → nuevo `StartTime` y repite
-4. Deduplica por `RecNo`
-5. Inserta registros nuevos (filtra `userId` vacío y `ErrorCode != 0`)
-6. Recalcula Entrada/Salida por `(personaId, día)`: alterna (1°=Entrada, 2°=Salida, ...)
-7. Cron automático cada 5 minutos (`@Cron('*/5 * * * *')`)
-
-### 3. Deduplicación
-
-- **Clave única**: `(userId, fecha)` — timestamp exacto
-- Si el Dahua recicla `RecNo` por buffer circular, el sistema lo detecta como registro distinto (diferente timestamp)
-
----
-
-## Webhook de eventos (push)
-
-**Endpoint**: `POST /api/dahua/event` (público, sin JWT)
-
-Acepta `multipart/form-data` y `application/json`.
-
-**Campos esperados:**
-- `UserID` — ID del usuario en el Dahua
-- `Time` o `EventTime` — timestamp del evento
-- `Method` — método de autenticación (Face, Card, etc.)
-
-**Flujo:**
-1. Recibe el POST del Dahua (configurado vía "Push Person Info")
-2. Busca la Persona por `userId` — si no existe, consulta `AccessControlCard` y la crea automáticamente
-3. Inserta en `Asistencia` (con dedup)
-4. Recalcula Entrada/Salida para ese día
-5. Responde 200 OK
-
-**Configuración en el Dahua:**
-- URL: `http://10.20.20.3:3000/api/dahua/event` (vía VPN)
-- Puerto: `3000`
-- Path: `/api/dahua/event`
+### Webhook (opcional)
+`POST /api/dahua/event` — recibe eventos push del Dahua (multipart/form-data o JSON). Auto-crea Persona si no existe.
 
 ---
 
 ## Dashboard de presencia
 
-`GET /api/asistencia/dashboard?fecha=YYYY-MM-DD`
+- **Dos secciones**: Docentes (horario desde `Asignacion`, módulos mergeados) y No Docentes (horario desde `Persona.horarioInicio/Fin`)
+- **Timeline 06:00-19:00** con marcas cada hora
+- **Bloques**: gris (horario esperado, opacity 0.12), naranja (presencia real, opacity 0.75)
+- **Auto-refresh**: 5 minutos
+- **Personas con horario aparecen aunque no hayan fichado**
 
-**Respuesta:**
-```json
-{
-  "fecha": "2026-07-01",
-  "personas": [
-    { "personaId": 1, "nombre": "MANZO SERGIO DAVID", "entrada": "06:53", "salida": null, "dentro": true },
-    { "personaId": 2, "nombre": "CALDERON LAURA", "entrada": "07:04", "salida": "08:15", "dentro": false }
-  ]
-}
-```
+---
 
-**Visualización:**
-- Timeline 06:00-19:00
-- Por persona: bloque de color desde `entrada` hasta `salida` (o `ahora` si sigue adentro)
-- Leyenda: "X personas Y adentro"
-- Auto-refresh: 5 minutos
-- Ordenados: adentro primero, luego por hora de entrada
+## Notas y evaluaciones
+
+- El docente crea `Evaluacion` (examen, TP, etc.) por materia+curso+trimestre
+- Grilla: filas = alumnos, columnas = evaluaciones
+- **Renombrar evaluaciones**: click en ícono ✏️ → input inline → Enter para guardar
+- **Nota por alumno**: numérica (0-10, Decimal 4,2)
+- **Cerrar trimestre**: calcula promedio sugerido de todas las evaluaciones → el docente puede ajustar → guarda `NotaTrimestre` y bloquea
+
+---
+
+## Asistencia de alumnos
+
+- **Grilla mensual**: filas = alumnos, columnas = días 1-31
+- **Checkbox** = presente. Fines de semana en gris, no editables. Días futuros bloqueados.
+- **Fila "Marcar todos"**: ✅ por columna para activar/desactivar todos los alumnos de ese día
+- **Navegación**: ← mes anterior | mes siguiente →
+- **Guardar** persiste todos los cambios en lote
+
+---
+
+## Import/Export alumnos
+
+- **Importar XLSX**: lee primera hoja, columnas: Apellido, Nombre, DNI, Contacto 1, Tel 1, Contacto 2, Tel 2, Contacto 3, Tel 3
+- **Exportar XLSX**: descarga `alumnos.xlsx` con todas las columnas
 
 ---
 
 ## Desarrollo local
 
 ```bash
-# Backend
-cd backend
-npm install
-npm run start:dev      # http://localhost:3000
-
-# Frontend (otra terminal)
-cd frontend
-npm install
-npm run dev            # http://localhost:5173 (proxy /api → :3000)
+cd backend && npm install && npm run start:dev     # :3000
+cd frontend && npm install && npm run dev          # :5173 (proxy /api → :3000)
 ```
-
-El frontend en desarrollo proxyfica `/api` al backend. No se necesita Caddy ni Docker para desarrollo local (excepto PostgreSQL y VPN para el Dahua).
 
 ---
 
 ## Solución de problemas
 
-### La base de datos está vacía
-- No usar `docker compose down -v` (borra el volumen)
-- Usar `docker compose up -d --build` para actualizar
-
-### El sync no trae registros nuevos
-- Verificar conectividad con el Dahua: `docker exec dahua-app node -e "require('http').get('http://10.10.10.100')"...`
-- Verificar logs: `docker logs dahua-app | grep "Página"`
-- Verificar que el Dahua tenga `AccessControlCardRec` con nuevos registros (interfaz web del Dahua)
-
-### El Dashboard muestra pocas personas
-- El sync se ejecuta cada 5 minutos. Para forzarlo: `POST /api/asistencia/sincronizar`
-- Si hay personas nuevas en el Dahua, sincronizar personas: `POST /api/personas/sincronizar`
-
-### Errores de CORS
-- El backend tiene `app.enableCors({ origin: true })`
-- En producción, Caddy maneja el dominio. En desarrollo, Vite proxyfica `/api`
-
-### El frontend muestra 404 al recargar (F5)
-- El backend tiene una ruta catch-all que sirve `index.html` para cualquier path que no sea `/api/*`
-- Si persiste, verificar que `main.ts` tenga `express.get('*', ...)` después de `setGlobalPrefix`
+| Problema | Solución |
+|---|---|
+| DB vacía | No usar `docker compose down -v`. Usar `up -d --build`. |
+| Sync no trae registros | Verificar VPN: `docker exec dahua-app node -e "require('http').get('http://10.10.10.100')"`. Revisar logs. |
+| Dashboard pocas personas | Forzar sync: `POST /api/asistencia/sincronizar`. Sincronizar personas: `POST /api/personas/sincronizar`. |
+| F5 da 404 | El backend tiene catch-all SPA (`express.get('*')` → `index.html`). |
+| Error 500 en curso-alumnos | Verificar que la ruta use `:cursoId` (no `:id`). |
