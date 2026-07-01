@@ -11,6 +11,7 @@ import { AsistenciaPage } from './pages/estructura/AsistenciaPage';
 import { DashboardPage } from './pages/estructura/DashboardPage';
 import { MisCursosPage } from './pages/MisCursosPage';
 import { NotasPage } from './pages/NotasPage';
+import { AsistenciaAlumnoPage } from './pages/AsistenciaAlumnoPage';
 import { useAuth } from './context/AuthContext';
 
 const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -40,11 +41,13 @@ export const App: React.FC = () => {
         <Route path="dashboard" element={<DashboardPage />} />
         <Route path="usuarios" element={<SystemUsersPage />} />
         <Route path="horarios/:nivelId/:turnoId" element={<HorarioEditorPage />} />
+        <Route path="asistencia-alumnos/:cursoId" element={<AsistenciaAlumnoPage />} />
       </Route>
       <Route path="/docente" element={<DocenteRoute><DocenteLayout /></DocenteRoute>}>
         <Route index element={<Navigate to="/docente/mis-cursos" replace />} />
         <Route path="mis-cursos" element={<MisCursosPage />} />
         <Route path="notas/:cursoId/:materiaId" element={<NotasPage />} />
+        <Route path="asistencia/:cursoId" element={<AsistenciaAlumnoPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/admin" replace />} />
     </Routes>
