@@ -275,6 +275,52 @@ export class AsistenciaController {
     }
   }
 
+  @Cron('0 0 * * *')
+  async corteMedianoche() {
+    try {
+      const ayer = new Date();
+      ayer.setDate(ayer.getDate() - 1);
+      const dia = ayer.toISOString().slice(0, 10);
+      const inicio = new Date(dia + 'T00:00:00');
+      const fin = new Date(dia + 'T23:59:59');
+
+      // Encontrar personas con último evento = Entrada (sin salida)
+      const personasConRegistros = await this.prisma.asistencia.findMany({
+        where: { fecha: { gte: inicio, lte: fin }, personaId: { not: null } },
+        select: { personaId: true },
+        distinct: ['personaId'],
+      });
+
+      let cerrados = 0;
+      for (const { personaId } of personasConRegistros) {
+        if (!personaId) continue;
+        const ultimo = await this.prisma.asistencia.findFirst({
+          where: { personaId, fecha: { gte: inicio, lte: fin } },
+          orderBy: { fecha: 'desc' },
+        });
+        // Si hay número impar de eventos, el último es Entrada (persona sigue adentro)
+        const count = await this.prisma.asistencia.count({ where: { personaId, fecha: { gte: inicio, lte: fin } } });
+        if (count % 2 === 1 && ultimo) {
+          // Crear salida ficticia a las 23:59:59
+          const salida = new Date(dia + 'T23:59:59');
+          await this.prisma.asistencia.create({
+            data: {
+              recNo: 0,
+              userId: ultimo.userId,
+              personaId,
+              fecha: salida,
+              tipo: 'Salida',
+            },
+          });
+          cerrados++;
+        }
+      }
+      if (cerrados > 0) console.log(`[Asistencia] Corte medianoche: ${cerrados} salidas automáticas generadas`);
+    } catch (e) {
+      console.error('[Asistencia] Error en corte medianoche:', e);
+    }
+  }
+
   private async sincronizar() {
     // Get last synced timestamp from DB
     const ultimoRegistro = await this.prisma.asistencia.findFirst({

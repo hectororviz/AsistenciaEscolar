@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { apiClient } from '../../api/client';
 import { RefreshCw, ChevronLeft, ChevronRight, User } from 'lucide-react';
 
@@ -44,16 +44,14 @@ export const AsistenciaPage: React.FC = () => {
   params.set('page', String(page));
   params.set('limit', '50');
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, refetch } = useQuery({
     queryKey: ['asistencia', personaId, desde, hasta, page],
     queryFn: async () => (await apiClient.get<AsistenciaResponse>(`/asistencia?${params.toString()}`)).data,
-    staleTime: 30 * 1000,
   });
 
-  const qc = useQueryClient();
   const changeTipo = useMutation({
     mutationFn: async ({ id, tipo }: { id: number; tipo: string }) => (await apiClient.put(`/asistencia/${id}/tipo`, { tipo })).data,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['asistencia'] }),
+    onSuccess: () => refetch(),
   });
 
   const [personas, setPersonas] = useState<{ id: number; nombre: string }[]>([]);
