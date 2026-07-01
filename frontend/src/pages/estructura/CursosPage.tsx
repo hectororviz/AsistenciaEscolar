@@ -280,7 +280,10 @@ export const CursosPage: React.FC = () => {
                                   <span style={{ flex: '0 0 90px', padding: '3px 8px' }}>
                                     <Clock size={13} style={{ marginRight: 2 }} />{c.turno?.nombre}
                                   </span>
-                                  <span style={{ flex: '0 0 80px', padding: '2px 4px', display: 'flex', gap: 4, justifyContent: 'center' }}>
+                                  <span style={{ flex: '0 0 110px', padding: '2px 4px', display: 'flex', gap: 4, justifyContent: 'center' }}>
+                                    <button className="icon-button" style={{ width: 30, height: 28 }} onClick={() => navigate(`/admin/cursos/${c.id}/alumnos`)} title="Alumnos">
+                                      <Users size={13} />
+                                    </button>
                                     <button className="icon-button" style={{ width: 30, height: 28 }} onClick={() => navigate(`/admin/cursos/${c.id}/asignacion`)} title="Asignar docentes">
                                       <BookOpen size={13} />
                                     </button>

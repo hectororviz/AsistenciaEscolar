@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../api/api';
 import { buildImageUrl } from '../api/client';
 import {
-  Users, UserCog, Settings, LogOut, Menu, ChevronDown, School, BookOpen, BarChart3, LayoutDashboard,
+  Users, UserCog, Settings, LogOut, Menu, ChevronDown, School, BookOpen, BarChart3, LayoutDashboard, GraduationCap,
 } from 'lucide-react';
 
 const COLLAPSED_KEY = 'ae-sidebar-collapsed';
@@ -22,6 +22,13 @@ interface NavCategory {
 }
 
 const navCategories: NavCategory[] = [
+  {
+    label: 'Alumnos',
+    icon: <GraduationCap size={20} />,
+    children: [
+      { to: '/admin/alumnos', icon: <Users size={18} />, label: 'Alumnos' },
+    ],
+  },
   {
     label: 'Personal',
     icon: <Users size={20} />,
