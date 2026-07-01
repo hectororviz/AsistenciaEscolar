@@ -16,6 +16,10 @@ import { MateriasModule } from './materias/materias.module';
 import { PersonasModule } from './personas/personas.module';
 import { AsignacionesModule } from './asignaciones/asignaciones.module';
 import { AsistenciaModule } from './asistencia/asistencia.module';
+import { UsersModule } from './users/users.module';
+import { AlumnosModule } from './alumnos/alumnos.module';
+import { EvaluacionesModule } from './evaluaciones/evaluaciones.module';
+import { AsistenciaAlumnosModule } from './asistencia-alumnos/asistencia-alumnos.module';
 
 @Module({
   imports: [
@@ -36,6 +40,10 @@ import { AsistenciaModule } from './asistencia/asistencia.module';
     PersonasModule,
     AsignacionesModule,
     AsistenciaModule,
+    UsersModule,
+    AlumnosModule,
+    EvaluacionesModule,
+    AsistenciaAlumnosModule,
   ],
 })
 export class AppModule {}

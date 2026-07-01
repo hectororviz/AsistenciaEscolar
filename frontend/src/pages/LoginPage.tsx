@@ -32,7 +32,11 @@ export const LoginPage: React.FC = () => {
     try {
       const response = await apiClient.post<AuthResponse>('/auth/login', { username, password });
       login(response.data);
-      navigate('/admin', { replace: true });
+      if (response.data.user.role === 'DOCENTE') {
+        navigate('/docente', { replace: true });
+      } else {
+        navigate('/admin', { replace: true });
+      }
     } catch (err) {
       setError(normalizeApiError(err));
     } finally {

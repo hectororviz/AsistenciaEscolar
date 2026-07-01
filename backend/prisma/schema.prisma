@@ -83,10 +83,16 @@ model Curso {
   turno          Turno        @relation(fields: [turnoId], references: [id], onDelete: Cascade)
   anio           Anio         @relation(fields: [anioId], references: [id], onDelete: Cascade)
   division       Division     @relation(fields: [divisionId], references: [id], onDelete: Cascade)
+
+  asignaciones   Asignacion[]
+  cursoAlumnos    CursoAlumno[]
+  evaluaciones    Evaluacion[]
+  notasTrimestre  NotaTrimestre[]
+  asistenciaAlumnos AsistenciaAlumno[]
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
-  asignaciones   Asignacion[]
+  @@unique([cicloLectivoId, nivelId, turnoId, anioId, divisionId])
 }
 
 model HorarioNivelTurno {
@@ -128,8 +134,10 @@ model TipoPersonal {
 model Materia {
   id          Int              @id @default(autoincrement())
   nombre      String           @unique
-  personas    PersonaMateria[]
-  asignaciones Asignacion[]
+  personas        PersonaMateria[]
+  asignaciones    Asignacion[]
+  evaluaciones    Evaluacion[]
+  notasTrimestre  NotaTrimestre[]
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
 }
@@ -152,6 +160,7 @@ model Persona {
   materias        PersonaMateria[]
   asignaciones    Asignacion[]
   asistencia      Asistencia[]
+  user            User?
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 }
@@ -200,4 +209,100 @@ model Asistencia {
   @@unique([userId, fecha])
   @@index([fecha])
   @@index([personaId])
+}
+
+enum Role {
+  ADMIN
+  DOCENTE
+}
+
+model User {
+  id        Int       @id @default(autoincrement())
+  username  String    @unique
+  password  String
+  role      Role      @default(DOCENTE)
+  personaId Int?      @unique
+  persona   Persona?  @relation(fields: [personaId], references: [id])
+  activo    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Alumno {
+  id              Int              @id @default(autoincrement())
+  dni             String?
+  apellido        String
+  nombre          String
+  fechaNacimiento DateTime?
+  direccion       String?
+  telefono        String?
+  email           String?
+  activo          Boolean          @default(true)
+  cursos          CursoAlumno[]
+  notas           Nota[]
+  notasTrimestre  NotaTrimestre[]
+  asistencia      AsistenciaAlumno[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+}
+
+model CursoAlumno {
+  id       Int    @id @default(autoincrement())
+  alumnoId Int
+  cursoId  Int
+  alumno   Alumno @relation(fields: [alumnoId], references: [id], onDelete: Cascade)
+  curso    Curso  @relation(fields: [cursoId], references: [id], onDelete: Cascade)
+
+  @@unique([alumnoId, cursoId])
+}
+
+model Evaluacion {
+  id        Int      @id @default(autoincrement())
+  materiaId Int
+  cursoId   Int
+  trimestre Int
+  nombre    String
+  fecha     DateTime @default(now())
+  materia   Materia  @relation(fields: [materiaId], references: [id])
+  curso     Curso    @relation(fields: [cursoId], references: [id], onDelete: Cascade)
+  notas     Nota[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Nota {
+  id            Int        @id @default(autoincrement())
+  evaluacionId  Int
+  alumnoId      Int
+  valor         Decimal    @db.Decimal(4, 2)
+  evaluacion    Evaluacion @relation(fields: [evaluacionId], references: [id], onDelete: Cascade)
+  alumno        Alumno     @relation(fields: [alumnoId], references: [id], onDelete: Cascade)
+
+  @@unique([evaluacionId, alumnoId])
+}
+
+model NotaTrimestre {
+  id        Int     @id @default(autoincrement())
+  materiaId Int
+  cursoId   Int
+  alumnoId  Int
+  trimestre Int
+  valor     Decimal @db.Decimal(4, 2)
+  cerrada   Boolean @default(false)
+  materia   Materia @relation(fields: [materiaId], references: [id])
+  curso     Curso   @relation(fields: [cursoId], references: [id], onDelete: Cascade)
+  alumno    Alumno  @relation(fields: [alumnoId], references: [id], onDelete: Cascade)
+
+  @@unique([materiaId, cursoId, alumnoId, trimestre])
+}
+
+model AsistenciaAlumno {
+  id        Int      @id @default(autoincrement())
+  alumnoId  Int
+  cursoId   Int
+  fecha     DateTime
+  alumno    Alumno   @relation(fields: [alumnoId], references: [id], onDelete: Cascade)
+  curso     Curso    @relation(fields: [cursoId], references: [id], onDelete: Cascade)
+
+  @@unique([alumnoId, cursoId, fecha])
 }

@@ -1,8 +1,20 @@
 import { createContext, useContext, useMemo, useState } from 'react';
-import type { AuthResponse } from '../api/api';
+
+interface AuthUser {
+  id: number;
+  username: string;
+  role: string;
+  personaId: number | null;
+  persona: { id: number; nombre: string } | null;
+}
+
+interface AuthResponse {
+  accessToken: string;
+  user: AuthUser;
+}
 
 interface AuthState {
-  user: { username: string; role: string } | null;
+  user: AuthUser | null;
   token: string | null;
 }
 

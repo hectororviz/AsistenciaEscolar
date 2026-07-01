@@ -25,7 +25,13 @@ export interface DahuaUser {
 
 export interface AuthResponse {
   accessToken: string;
-  user: { username: string; role: string };
+  user: {
+    id: number;
+    username: string;
+    role: string;
+    personaId: number | null;
+    persona: { id: number; nombre: string } | null;
+  };
 }
 
 export interface Settings {
