@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../../api/client';
-import { RefreshCw, ChevronLeft, ChevronRight, User, DoorOpen } from 'lucide-react';
+import { RefreshCw, ChevronLeft, ChevronRight, User } from 'lucide-react';
 
 interface AsistenciaRecord {
   id: number; recNo: number; userId: string; personaId: number | null;
@@ -48,6 +48,12 @@ export const AsistenciaPage: React.FC = () => {
     queryKey: ['asistencia', personaId, desde, hasta, page],
     queryFn: async () => (await apiClient.get<AsistenciaResponse>(`/asistencia?${params.toString()}`)).data,
     staleTime: 30 * 1000,
+  });
+
+  const qc = useQueryClient();
+  const changeTipo = useMutation({
+    mutationFn: async ({ id, tipo }: { id: number; tipo: string }) => (await apiClient.put(`/asistencia/${id}/tipo`, { tipo })).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['asistencia'] }),
   });
 
   const [personas, setPersonas] = useState<{ id: number; nombre: string }[]>([]);
@@ -157,9 +163,20 @@ export const AsistenciaPage: React.FC = () => {
                   <span className="col-type" style={{ padding: '2px 8px' }}>{fmtTime(rec.fecha)}</span>
                   <span className="col-team" style={{ padding: '2px 8px' }}><User size={12} style={{ marginRight: 4 }} />{rec.persona?.nombre || rec.userId || '-'}</span>
                   <span className="col-category" style={{ padding: '2px 8px' }}>
-                    <span className={`badge ${rec.tipo === 'Entrada' ? 'badge-success' : 'badge-warning'}`}>
-                      <DoorOpen size={11} /> {rec.tipo}
-                    </span>
+                    <select
+                      value={rec.tipo}
+                      onChange={e => changeTipo.mutate({ id: rec.id, tipo: e.target.value })}
+                      style={{
+                        padding: '1px 4px', fontSize: '0.72rem', borderRadius: 3,
+                        border: `1px solid var(--color-border)`,
+                        background: rec.tipo === 'Entrada' ? 'var(--color-success-bg)' : 'var(--color-warning-bg)',
+                        color: rec.tipo === 'Entrada' ? 'var(--color-success)' : 'var(--color-warning)',
+                        fontWeight: 600, cursor: 'pointer',
+                      }}
+                    >
+                      <option value="Entrada">Entrada</option>
+                      <option value="Salida">Salida</option>
+                    </select>
                   </span>
                 </div>
               );
