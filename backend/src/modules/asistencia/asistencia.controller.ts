@@ -52,21 +52,141 @@ export class AsistenciaController {
     const dia = fecha || new Date().toISOString().slice(0, 10);
     const inicio = new Date(`${dia}T00:00:00`);
     const fin = new Date(`${dia}T23:59:59`);
+    const diaSemana = new Date(dia).getDay(); // 0=Dom, 1=Lun, ..., 5=Vie
+    const esDiaHabil = diaSemana >= 1 && diaSemana <= 5;
 
+    // 1. Attendance records for today
     const registros = await this.prisma.asistencia.findMany({
       where: { fecha: { gte: inicio, lte: fin }, personaId: { not: null } },
-      include: { persona: { select: { id: true, nombre: true } } },
+      include: { persona: { select: { id: true, nombre: true, tipoPersonal: true, horarioInicio: true, horarioFin: true } } },
       orderBy: { fecha: 'asc' },
     });
 
-    // Agrupar por persona
-    const porPersona = new Map<number, { persona: { id: number; nombre: string }; eventos: { fecha: Date; tipo: string }[] }>();
+    // 2. Personas with horarios (docentes with Asignacion, no docentes with horarioInicio/horarioFin)
+    // that might NOT have attendance yet
+    const personasSinAsistencia = [];
+    
+    if (esDiaHabil) {
+      // Docentes with Asignacion for today
+      const docentesConAsignacion = await this.prisma.asignacion.findMany({
+        where: { diaSemana },
+        select: { personaId: true, persona: { select: { id: true, nombre: true, tipoPersonal: true } } },
+        distinct: ['personaId'],
+      });
+      
+      // Non-docentes with horarioInicio set
+      const noDocentesConHorario = await this.prisma.persona.findMany({
+        where: {
+          horarioInicio: { not: null },
+          tipoPersonal: { nombre: { not: 'Docente' } },
+        },
+        select: { id: true, nombre: true, tipoPersonal: true, horarioInicio: true, horarioFin: true },
+      });
+
+      // Collect personaIds already in attendance records
+      const presentesIds = new Set(registros.map(r => r.personaId));
+      
+      // Add docentes not yet present
+      for (const d of docentesConAsignacion) {
+        if (!presentesIds.has(d.personaId)) {
+          personasSinAsistencia.push({ persona: d.persona, esDocente: true, horarioInicio: null, horarioFin: null });
+          presentesIds.add(d.personaId);
+        }
+      }
+      
+      // Add no docentes not yet present
+      for (const nd of noDocentesConHorario) {
+        if (!presentesIds.has(nd.id)) {
+          personasSinAsistencia.push({
+            persona: nd,
+            esDocente: false,
+            horarioInicio: nd.horarioInicio,
+            horarioFin: nd.horarioFin,
+          });
+          presentesIds.add(nd.id);
+        }
+      }
+    }
+
+    // Agrupar por persona (from attendance)
+    const porPersona = new Map<number, {
+      persona: { id: number; nombre: string; esDocente: boolean; horarioInicio: string | null; horarioFin: string | null };
+      eventos: { fecha: Date; tipo: string }[];
+    }>();
     for (const r of registros) {
       if (!r.personaId || !r.persona) continue;
       if (!porPersona.has(r.personaId)) {
-        porPersona.set(r.personaId, { persona: r.persona, eventos: [] });
+        porPersona.set(r.personaId, {
+          persona: {
+            id: r.persona.id,
+            nombre: r.persona.nombre,
+            esDocente: r.persona.tipoPersonal?.nombre === 'Docente',
+            horarioInicio: r.persona.horarioInicio,
+            horarioFin: r.persona.horarioFin,
+          },
+          eventos: [],
+        });
       }
       porPersona.get(r.personaId)!.eventos.push({ fecha: r.fecha, tipo: r.tipo });
+    }
+
+    // Add personas with horario but no attendance
+    for (const psa of personasSinAsistencia) {
+      if (!porPersona.has(psa.persona!.id)) {
+        porPersona.set(psa.persona!.id, {
+          persona: {
+            id: psa.persona!.id,
+            nombre: psa.persona!.nombre,
+            esDocente: psa.esDocente,
+            horarioInicio: psa.horarioInicio,
+            horarioFin: psa.horarioFin,
+          },
+          eventos: [],
+        });
+      }
+    }
+
+    // Obtener horarios de docentes desde Asignacion
+    const docenteIds = Array.from(porPersona.values())
+      .filter(p => p.persona.esDocente)
+      .map(p => p.persona.id);
+
+    const horariosDocentes = new Map<number, { horaInicio: string; horaFin: string }[]>();
+
+    if (docenteIds.length > 0 && diaSemana >= 1 && diaSemana <= 5) {
+      const asignaciones = await this.prisma.asignacion.findMany({
+        where: { personaId: { in: docenteIds }, diaSemana },
+        include: { moduloHorario: true },
+        orderBy: { moduloHorario: { horaInicio: 'asc' } },
+      });
+
+      const porDocente = new Map<number, { horaInicio: string; horaFin: string }[]>();
+      for (const a of asignaciones) {
+        if (!porDocente.has(a.personaId)) porDocente.set(a.personaId, []);
+        porDocente.get(a.personaId)!.push({
+          horaInicio: a.moduloHorario.horaInicio,
+          horaFin: a.moduloHorario.horaFin,
+        });
+      }
+
+      // Merge módulos contiguos (incluyendo recreos de hasta 15 min)
+      for (const [pid, modulos] of porDocente) {
+        const merged: { horaInicio: string; horaFin: string }[] = [];
+        for (const m of modulos) {
+          const last = merged.length > 0 ? merged[merged.length - 1] : null;
+          if (last) {
+            const [lh, lm] = last.horaFin.split(':').map(Number);
+            const [mh, mm] = m.horaInicio.split(':').map(Number);
+            const gap = (mh * 60 + mm) - (lh * 60 + lm);
+            if (gap <= 15) {
+              last.horaFin = m.horaFin;
+              continue;
+            }
+          }
+          merged.push({ ...m });
+        }
+        horariosDocentes.set(pid, merged);
+      }
     }
 
     const personas = [];
@@ -87,12 +207,20 @@ export class AsistenciaController {
         }
       }
 
+      const horario = data.persona.esDocente
+        ? horariosDocentes.get(data.persona.id) || []
+        : (data.persona.horarioInicio && data.persona.horarioFin
+            ? [{ horaInicio: data.persona.horarioInicio, horaFin: data.persona.horarioFin }]
+            : []);
+
       personas.push({
         personaId: data.persona.id,
         nombre: data.persona.nombre,
         entrada,
         salida,
         dentro,
+        esDocente: data.persona.esDocente,
+        horario,
       });
     }
 

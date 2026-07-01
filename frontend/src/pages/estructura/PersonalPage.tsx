@@ -14,6 +14,11 @@ export const PersonalPage: React.FC = () => {
   const navigate = useNavigate();
   const [tab, setTab] = useState<Tab>('personas');
 
+  // Filtros
+  const [search, setSearch] = useState('');
+  const [filterTipoId, setFilterTipoId] = useState<number>(0);
+  const [showDisabled, setShowDisabled] = useState(false);
+
   // Personas
   const { data: personas, isLoading } = usePersonas();
   const updatePersona = usePersonaUpdate();
@@ -52,6 +57,7 @@ export const PersonalPage: React.FC = () => {
       habilitado: p.habilitado, fechaNacimiento: p.fechaNacimiento?.slice(0, 10) || '',
       dni: p.dni || '', direccion: p.direccion || '', telefono: p.telefono || '', email: p.email || '',
       notas: p.notas || '', tipoPersonalId: p.tipoPersonalId,
+      horarioInicio: p.horarioInicio || '', horarioFin: p.horarioFin || '',
       materiaIds: p.materias?.map(m => m.materiaId) || [],
     });
     setPersonaModal({ open: true, persona: p, readOnly: true });
@@ -62,6 +68,7 @@ export const PersonalPage: React.FC = () => {
       habilitado: p.habilitado, fechaNacimiento: p.fechaNacimiento?.slice(0, 10) || '',
       dni: p.dni || '', direccion: p.direccion || '', telefono: p.telefono || '', email: p.email || '',
       notas: p.notas || '', tipoPersonalId: p.tipoPersonalId,
+      horarioInicio: p.horarioInicio || '', horarioFin: p.horarioFin || '',
       materiaIds: p.materias?.map(m => m.materiaId) || [],
     });
     setPersonaModal({ open: true, persona: p, readOnly: false });
@@ -108,6 +115,45 @@ export const PersonalPage: React.FC = () => {
             <h2 style={{ margin: 0 }}>Personal</h2>
             <span style={{ color: 'var(--color-text-muted)' }}>{personas?.length || 0} personas</span>
           </div>
+
+          {/* Filtros */}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+            <input
+              className="login-input"
+              style={{ flex: 1, minWidth: 180, padding: '5px 8px', fontSize: '0.85rem' }}
+              type="text"
+              placeholder="Buscar por nombre..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+            <select
+              className="login-input"
+              style={{ flex: '0 0 180px', padding: '5px 8px', fontSize: '0.85rem' }}
+              value={filterTipoId}
+              onChange={e => setFilterTipoId(+e.target.value)}
+            >
+              <option value={0}>Todos los tipos</option>
+              {tipos?.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
+            </select>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.85rem', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+              <div
+                onClick={() => setShowDisabled(!showDisabled)}
+                style={{
+                  width: 38, height: 20, borderRadius: 10, cursor: 'pointer',
+                  background: showDisabled ? 'var(--color-success)' : 'var(--color-border-strong)',
+                  position: 'relative', transition: 'background 0.2s', flexShrink: 0,
+                }}
+              >
+                <div style={{
+                  width: 14, height: 14, borderRadius: '50%', background: '#fff',
+                  position: 'absolute', top: 3, left: showDisabled ? 21 : 3, transition: 'left 0.2s',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                }} />
+              </div>
+              <span style={{ color: 'var(--color-text-muted)' }}>Ver inactivos</span>
+            </label>
+          </div>
+
           <div className="sales-table-wrapper">
             <div className="sales-table">
               <div className="sales-table-head">
@@ -116,28 +162,40 @@ export const PersonalPage: React.FC = () => {
                 <span style={{ flex: 1, padding: '4px 8px', borderBottom: '2px solid var(--color-border)' }}>Nombre</span>
                 <span style={{ flex: '0 0 140px', padding: '4px 8px', borderBottom: '2px solid var(--color-border)' }}>Tipo</span>
                 <span style={{ flex: '0 0 90px', padding: '4px 8px', borderBottom: '2px solid var(--color-border)', textAlign: 'center' }}>Estado</span>
-                <span style={{ flex: '0 0 80px', padding: '4px 8px', borderBottom: '2px solid var(--color-border)', display: 'flex', gap: 4, justifyContent: 'center' }}></span>
+                <span style={{ flex: '0 0 110px', padding: '4px 8px', borderBottom: '2px solid var(--color-border)', display: 'flex', gap: 4, justifyContent: 'center' }}></span>
               </div>
               {isLoading ? (
                 <div className="sales-table-row"><span style={{ flex: 1, textAlign: 'center', padding: 8 }}>Cargando...</span></div>
-              ) : personas?.map((p, i) => (
-                <div key={p.id} className="sales-table-row" style={{ fontSize: '0.85rem' }}>
-                  <span style={{ flex: '0 0 40px', padding: '3px 8px', textAlign: 'center' }}>{i + 1}</span>
-                  <span style={{ flex: '0 0 80px', padding: '3px 8px' }}>{p.userId}</span>
-                  <span style={{ flex: 1, padding: '3px 8px' }}><User size={13} style={{ marginRight: 4 }} />{p.nombre}</span>
-                  <span style={{ flex: '0 0 140px', padding: '3px 8px' }}>{p.tipoPersonal?.nombre}</span>
-                  <span style={{ flex: '0 0 90px', padding: '3px 8px', textAlign: 'center' }}>
-                    <span className={`badge ${p.habilitado ? 'badge-success' : 'badge-warning'}`}>
-                      {p.habilitado ? <><Check size={11} /> Habilitado</> : <><Ban size={11} /> Deshab.</>}
-                    </span>
-                  </span>
-                  <span style={{ flex: '0 0 110px', padding: '2px 4px', display: 'flex', gap: 4, justifyContent: 'center' }}>
-                    <button className="icon-button" style={{ width: 30, height: 28 }} onClick={() => openView(p)} title="Ver"><Eye size={13} /></button>
-                    <button className="icon-button" style={{ width: 30, height: 28 }} onClick={() => openEdit(p)} title="Editar"><Edit size={13} /></button>
-                    <button className="icon-button" style={{ width: 30, height: 28 }} onClick={() => navigate(`/admin/asistencia?personaId=${p.id}`)} title="Asistencia"><BarChart3 size={13} /></button>
-                  </span>
-                </div>
-              ))}
+              ) : (() => {
+                const filtered = personas?.filter(p => {
+                  if (!showDisabled && !p.habilitado) return false;
+                  if (filterTipoId > 0 && p.tipoPersonalId !== filterTipoId) return false;
+                  if (search && !p.nombre.toLowerCase().includes(search.toLowerCase())) return false;
+                  return true;
+                }) || [];
+                return filtered.length === 0 ? (
+                  <div className="sales-table-row"><span style={{ flex: 1, textAlign: 'center', padding: 8, color: 'var(--color-text-muted)' }}>Sin resultados</span></div>
+                ) : (
+                  filtered.map((p, i) => (
+                    <div key={p.id} className="sales-table-row" style={{ fontSize: '0.85rem' }}>
+                      <span style={{ flex: '0 0 40px', padding: '3px 8px', textAlign: 'center' }}>{i + 1}</span>
+                      <span style={{ flex: '0 0 80px', padding: '3px 8px' }}>{p.userId}</span>
+                      <span style={{ flex: 1, padding: '3px 8px' }}><User size={13} style={{ marginRight: 4 }} />{p.nombre}</span>
+                      <span style={{ flex: '0 0 140px', padding: '3px 8px' }}>{p.tipoPersonal?.nombre}</span>
+                      <span style={{ flex: '0 0 90px', padding: '3px 8px', textAlign: 'center' }}>
+                        <span className={`badge ${p.habilitado ? 'badge-success' : 'badge-warning'}`}>
+                          {p.habilitado ? <><Check size={11} /> Habilitado</> : <><Ban size={11} /> Deshab.</>}
+                        </span>
+                      </span>
+                      <span style={{ flex: '0 0 110px', padding: '2px 4px', display: 'flex', gap: 4, justifyContent: 'center' }}>
+                        <button className="icon-button" style={{ width: 30, height: 28 }} onClick={() => openView(p)} title="Ver"><Eye size={13} /></button>
+                        <button className="icon-button" style={{ width: 30, height: 28 }} onClick={() => openEdit(p)} title="Editar"><Edit size={13} /></button>
+                        <button className="icon-button" style={{ width: 30, height: 28 }} onClick={() => navigate(`/admin/asistencia?personaId=${p.id}`)} title="Asistencia"><BarChart3 size={13} /></button>
+                      </span>
+                    </div>
+                  ))
+                );
+              })()}
             </div>
           </div>
         </>
@@ -288,6 +346,18 @@ export const PersonalPage: React.FC = () => {
                         </label>
                       );
                     })}
+                  </div>
+                </div>
+              )}
+              {!isDocente && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div className="login-field">
+                    <label className="login-label">Horario Inicio</label>
+                    <input className="login-input" type="time" value={editForm.horarioInicio || ''} onChange={e => setEditForm({ ...editForm, horarioInicio: e.target.value })} disabled={personaModal.readOnly} />
+                  </div>
+                  <div className="login-field">
+                    <label className="login-label">Horario Fin</label>
+                    <input className="login-input" type="time" value={editForm.horarioFin || ''} onChange={e => setEditForm({ ...editForm, horarioFin: e.target.value })} disabled={personaModal.readOnly} />
                   </div>
                 </div>
               )}

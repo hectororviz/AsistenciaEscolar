@@ -38,6 +38,8 @@ export class PersonasController {
       telefono?: string;
       email?: string;
       notas?: string;
+      horarioInicio?: string;
+      horarioFin?: string;
       tipoPersonalId?: number;
       materiaIds?: number[];
     },

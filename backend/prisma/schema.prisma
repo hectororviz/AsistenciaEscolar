@@ -145,6 +145,8 @@ model Persona {
   telefono        String?
   email           String?
   notas           String?
+  horarioInicio   String?
+  horarioFin      String?
   tipoPersonalId  Int
   tipoPersonal    TipoPersonal     @relation(fields: [tipoPersonalId], references: [id])
   materias        PersonaMateria[]

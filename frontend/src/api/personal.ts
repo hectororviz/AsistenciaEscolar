@@ -7,6 +7,7 @@ export interface Persona {
   id: number; userId: string; nombre: string; habilitado: boolean;
   fechaNacimiento?: string; dni?: string; direccion?: string;
   telefono?: string; email?: string; notas?: string;
+  horarioInicio?: string; horarioFin?: string;
   tipoPersonalId: number; tipoPersonal?: TipoPersonal;
   materias?: { id: number; materiaId: number; materia?: Materia }[];
 }
