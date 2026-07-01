@@ -37,7 +37,7 @@ export const App: React.FC = () => {
         <Route index element={<Navigate to="/admin/cursos" replace />} />
         <Route path="cursos" element={<CursosPage />} />
         <Route path="cursos/:cursoId/asignacion" element={<AsignacionPage />} />
-        <Route path="cursos/:id/alumnos" element={<CursoAlumnosPage />} />
+        <Route path="cursos/:cursoId/alumnos" element={<CursoAlumnosPage />} />
         <Route path="alumnos" element={<AlumnosPage />} />
         <Route path="personal/personas" element={<PersonalPage />} />
         <Route path="asistencia" element={<AsistenciaPage />} />
