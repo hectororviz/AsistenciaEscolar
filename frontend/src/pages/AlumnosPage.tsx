@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../api/client';
 import { Plus, Edit, X, Search, Download, Upload, Check, Ban, User, ArrowLeft } from 'lucide-react';
+import * as XLSX from 'xlsx';
 
 interface Alumno {
   id: number; dni?: string; apellido: string; nombre: string;
@@ -18,7 +19,7 @@ export const AlumnosPage: React.FC = () => {
   const [modal, setModal] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [form, setForm] = useState({ apellido: '', nombre: '', dni: '', fechaNacimiento: '', direccion: '', telefono: '', email: '' });
-  const [importText, setImportText] = useState('');
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const { data: alumnos } = useQuery({
     queryKey: ['alumnos', search],
@@ -41,27 +42,33 @@ export const AlumnosPage: React.FC = () => {
   const openNew = () => { setEditId(null); setForm({ apellido: '', nombre: '', dni: '', fechaNacimiento: '', direccion: '', telefono: '', email: '' }); setModal(true); };
   const openEdit = (a: Alumno) => { setEditId(a.id); setForm({ apellido: a.apellido, nombre: a.nombre, dni: a.dni || '', fechaNacimiento: a.fechaNacimiento?.slice(0, 10) || '', direccion: a.direccion || '', telefono: a.telefono || '', email: a.email || '' }); setModal(true); };
 
-  const handleImport = async () => {
-    const lines = importText.split('\n').filter(l => l.trim());
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const data = await file.arrayBuffer();
+    const wb = XLSX.read(data, { type: 'array' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json<any>(ws, { header: 1 });
     let count = 0;
-    for (const line of lines) {
-      const parts = line.split(',').map(s => s.trim());
-      if (parts.length >= 2) {
-        await apiClient.post('/alumnos', { apellido: parts[0], nombre: parts[1], dni: parts[2] || '' });
+    for (let i = 1; i < rows.length; i++) {
+      const r = rows[i] as any[];
+      if (r && r.length >= 2 && r[0] && r[1]) {
+        await apiClient.post('/alumnos', { apellido: String(r[0]).trim(), nombre: String(r[1]).trim(), dni: r[2] ? String(r[2]).trim() : '' });
         count++;
       }
     }
     alert(`${count} alumnos importados`);
-    setImportText('');
     qc.invalidateQueries({ queryKey: ['alumnos'] });
+    if (fileRef.current) fileRef.current.value = '';
   };
 
   const handleExport = () => {
     if (!alumnos) return;
-    const csv = alumnos.map(a => `${a.apellido},${a.nombre},${a.dni || ''}`).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = 'alumnos.csv'; a.click();
+    const data = [['Apellido', 'Nombre', 'DNI'], ...alumnos.map(a => [a.apellido, a.nombre, a.dni || ''])];
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Alumnos');
+    XLSX.writeFile(wb, 'alumnos.xlsx');
   };
 
   const filtered = alumnos?.filter(a => showInactivos ? true : a.activo) || [];
@@ -73,23 +80,12 @@ export const AlumnosPage: React.FC = () => {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <h2 style={{ margin: 0 }}>Alumnos</h2>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn-secondary" onClick={() => setImportText('')}><Download size={14} /> Importar</button>
-          <button className="btn-secondary" onClick={handleExport}><Upload size={14} /> Exportar</button>
+          <input ref={fileRef} type="file" accept=".xlsx,.xls" onChange={handleImportFile} style={{ display: 'none' }} />
+          <button className="btn-secondary" onClick={() => fileRef.current?.click()}><Download size={14} /> Importar XLSX</button>
+          <button className="btn-secondary" onClick={handleExport}><Upload size={14} /> Exportar XLSX</button>
           <button className="btn-secondary" onClick={openNew}><Plus size={14} /> Nuevo</button>
         </div>
       </div>
-
-      {/* Import panel */}
-      {importText !== undefined && !modal && (
-        <div style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: 8, padding: 12, marginBottom: 16 }}>
-          <p style={{ margin: '0 0 8px', fontSize: '0.85rem' }}>Pegá los alumnos (apellido, nombre, dni por línea):</p>
-          <textarea className="login-input" rows={5} value={importText} onChange={e => setImportText(e.target.value)} style={{ fontSize: '0.8rem', resize: 'vertical' }} />
-          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-            <button className="btn-secondary" onClick={handleImport}>Importar</button>
-            <button className="btn-secondary" onClick={() => setImportText('')}>Cancelar</button>
-          </div>
-        </div>
-      )}
 
       {/* Filters */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'center' }}>
