@@ -86,14 +86,14 @@ export const SystemUsersPage: React.FC = () => {
         <div className="sales-table-wrapper">
           <div className="sales-table">
             <div className="sales-table-head">
-              <span className="col-team">Dahua ID</span>
-              <span className="col-category">Nombre</span>
+              <span style={{ flex: '0 0 80px', padding: '4px 8px', borderBottom: '2px solid var(--color-border)' }}>Dahua ID</span>
+              <span className="col-team">Nombre</span>
               <span className="col-action"></span>
             </div>
             {sinCuenta.map(d => (
               <div key={d.id} className="sales-table-row" style={{ fontSize: '0.85rem' }}>
-                <span className="col-team">{d.userId}</span>
-                <span className="col-category"><User size={13} style={{ marginRight: 4 }} />{d.nombre}</span>
+                <span style={{ flex: '0 0 80px', padding: '3px 8px' }}>{d.userId}</span>
+                <span className="col-team"><User size={13} style={{ marginRight: 4 }} />{d.nombre}</span>
                 <span className="col-action">
                   <button className="btn-secondary" style={{ fontSize: '0.75rem', padding: '2px 8px' }} onClick={() => openNew(d.id, d.userId)}>
                     <Plus size={12} /> Crear usuario

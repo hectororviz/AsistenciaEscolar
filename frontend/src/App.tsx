@@ -13,9 +13,17 @@ import { MisCursosPage } from './pages/MisCursosPage';
 import { NotasPage } from './pages/NotasPage';
 import { useAuth } from './context/AuthContext';
 
-const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { token } = useAuth();
+const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { token, user } = useAuth();
   if (!token) return <Navigate to="/login" replace />;
+  if (user?.role === 'DOCENTE') return <Navigate to="/docente" replace />;
+  return <>{children}</>;
+};
+
+const DocenteRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { token, user } = useAuth();
+  if (!token) return <Navigate to="/login" replace />;
+  if (user?.role !== 'DOCENTE') return <Navigate to="/admin" replace />;
   return <>{children}</>;
 };
 
@@ -23,7 +31,7 @@ export const App: React.FC = () => {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/admin" element={<ProtectedRoute><AdminLayout /></ProtectedRoute>}>
+      <Route path="/admin" element={<AdminRoute><AdminLayout /></AdminRoute>}>
         <Route index element={<Navigate to="/admin/cursos" replace />} />
         <Route path="cursos" element={<CursosPage />} />
         <Route path="cursos/:cursoId/asignacion" element={<AsignacionPage />} />
@@ -33,7 +41,7 @@ export const App: React.FC = () => {
         <Route path="usuarios" element={<SystemUsersPage />} />
         <Route path="horarios/:nivelId/:turnoId" element={<HorarioEditorPage />} />
       </Route>
-      <Route path="/docente" element={<ProtectedRoute><DocenteLayout /></ProtectedRoute>}>
+      <Route path="/docente" element={<DocenteRoute><DocenteLayout /></DocenteRoute>}>
         <Route index element={<Navigate to="/docente/mis-cursos" replace />} />
         <Route path="mis-cursos" element={<MisCursosPage />} />
         <Route path="notas/:cursoId/:materiaId" element={<NotasPage />} />
