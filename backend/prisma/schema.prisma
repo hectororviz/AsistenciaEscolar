@@ -1,0 +1,201 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model CicloLectivo {
+  id         Int       @id @default(autoincrement())
+  anio       Int       @unique
+  nombre     String?
+  fechaInicio DateTime
+  fechaFin   DateTime
+  activo     Boolean   @default(true)
+  cursos     Curso[]
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+}
+
+model Nivel {
+  id                Int               @id @default(autoincrement())
+  nombre            String            @unique
+  duracionModuloMin Int               @default(50)
+  cantidadAnios     Int               @default(6)
+  turnos            Turno[]
+  anios             Anio[]
+  horarios          HorarioNivelTurno[]
+  cursos            Curso[]
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+}
+
+model Turno {
+  id        Int               @id @default(autoincrement())
+  nombre    String
+  horaInicio String
+  horaFin   String
+  nivelId   Int
+  nivel     Nivel             @relation(fields: [nivelId], references: [id], onDelete: Cascade)
+  anios     Anio[]
+  horarios  HorarioNivelTurno[]
+  cursos    Curso[]
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+}
+
+model Anio {
+  id         Int        @id @default(autoincrement())
+  nombre     String
+  orden      Int
+  nivelId    Int
+  turnoId    Int
+  nivel      Nivel      @relation(fields: [nivelId], references: [id], onDelete: Cascade)
+  turno      Turno      @relation(fields: [turnoId], references: [id], onDelete: Cascade)
+  divisiones Division[]
+  cursos     Curso[]
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+}
+
+model Division {
+  id        Int      @id @default(autoincrement())
+  nombre    String
+  anioId    Int
+  anio      Anio     @relation(fields: [anioId], references: [id], onDelete: Cascade)
+  cursos    Curso[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Curso {
+  id             Int         @id @default(autoincrement())
+  cicloLectivoId Int
+  nivelId        Int
+  turnoId        Int
+  anioId         Int
+  divisionId     Int
+  cicloLectivo   CicloLectivo @relation(fields: [cicloLectivoId], references: [id], onDelete: Cascade)
+  nivel          Nivel        @relation(fields: [nivelId], references: [id], onDelete: Cascade)
+  turno          Turno        @relation(fields: [turnoId], references: [id], onDelete: Cascade)
+  anio           Anio         @relation(fields: [anioId], references: [id], onDelete: Cascade)
+  division       Division     @relation(fields: [divisionId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  asignaciones   Asignacion[]
+}
+
+model HorarioNivelTurno {
+  id        Int             @id @default(autoincrement())
+  nivelId   Int
+  turnoId   Int
+  nivel     Nivel           @relation(fields: [nivelId], references: [id], onDelete: Cascade)
+  turno     Turno           @relation(fields: [turnoId], references: [id], onDelete: Cascade)
+  modulos   ModuloHorario[]
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@unique([nivelId, turnoId])
+}
+
+model ModuloHorario {
+  id          Int               @id @default(autoincrement())
+  orden       Int
+  tipo        String            @default("MODULO")
+  etiqueta    String
+  horaInicio  String
+  horaFin     String
+  duracionMin Int
+  horarioId   Int
+  horario     HorarioNivelTurno @relation(fields: [horarioId], references: [id], onDelete: Cascade)
+  asignaciones Asignacion[]
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+}
+
+model TipoPersonal {
+  id        Int       @id @default(autoincrement())
+  nombre    String    @unique
+  personas  Persona[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Materia {
+  id          Int              @id @default(autoincrement())
+  nombre      String           @unique
+  personas    PersonaMateria[]
+  asignaciones Asignacion[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+}
+
+model Persona {
+  id              Int              @id @default(autoincrement())
+  userId          String           @unique
+  nombre          String
+  habilitado      Boolean          @default(true)
+  fechaNacimiento DateTime?
+  dni             String?
+  direccion       String?
+  telefono        String?
+  email           String?
+  notas           String?
+  tipoPersonalId  Int
+  tipoPersonal    TipoPersonal     @relation(fields: [tipoPersonalId], references: [id])
+  materias        PersonaMateria[]
+  asignaciones    Asignacion[]
+  asistencia      Asistencia[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+}
+
+model PersonaMateria {
+  id        Int      @id @default(autoincrement())
+  personaId Int
+  materiaId Int
+  persona   Persona  @relation(fields: [personaId], references: [id], onDelete: Cascade)
+  materia   Materia  @relation(fields: [materiaId], references: [id], onDelete: Cascade)
+
+  @@unique([personaId, materiaId])
+}
+
+model Asignacion {
+  id              Int           @id @default(autoincrement())
+  cursoId         Int
+  moduloHorarioId Int
+  diaSemana       Int
+  materiaId       Int
+  personaId       Int
+  curso           Curso         @relation(fields: [cursoId], references: [id], onDelete: Cascade)
+  moduloHorario   ModuloHorario @relation(fields: [moduloHorarioId], references: [id])
+  materia         Materia       @relation(fields: [materiaId], references: [id])
+  persona         Persona       @relation(fields: [personaId], references: [id])
+
+  @@unique([cursoId, moduloHorarioId, diaSemana])
+}
+
+model Asistencia {
+  id        Int       @id @default(autoincrement())
+  recNo     Int
+  userId    String
+  personaId Int?
+  fecha     DateTime
+  tipo      String
+  method    Int?
+  readerId  Int?
+  door      Int?
+  status    Int?
+  errorCode Int?
+  raw       Json?
+  persona   Persona?  @relation(fields: [personaId], references: [id])
+  createdAt DateTime  @default(now())
+
+  @@unique([userId, fecha])
+  @@index([fecha])
+  @@index([personaId])
+}
