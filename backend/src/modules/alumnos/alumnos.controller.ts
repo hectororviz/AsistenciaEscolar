@@ -18,7 +18,7 @@ export class AlumnosController {
   }
 
   @Post()
-  create(@Body() d: { dni?: string; apellido: string; nombre: string; fechaNacimiento?: string; direccion?: string; telefono?: string; email?: string }) {
+  create(@Body() d: { dni?: string; apellido: string; nombre: string; fechaNacimiento?: string; direccion?: string; contacto1Nombre?: string; contacto1Tel?: string; contacto2Nombre?: string; contacto2Tel?: string; contacto3Nombre?: string; contacto3Tel?: string }) {
     return this.prisma.alumno.create({ data: { ...d, ...(d.fechaNacimiento ? { fechaNacimiento: new Date(d.fechaNacimiento) } : {}) } });
   }
 

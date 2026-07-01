@@ -7,7 +7,10 @@ import * as XLSX from 'xlsx';
 
 interface Alumno {
   id: number; dni?: string; apellido: string; nombre: string;
-  fechaNacimiento?: string; direccion?: string; telefono?: string; email?: string;
+  fechaNacimiento?: string; direccion?: string;
+  contacto1Nombre?: string; contacto1Tel?: string;
+  contacto2Nombre?: string; contacto2Tel?: string;
+  contacto3Nombre?: string; contacto3Tel?: string;
   activo: boolean;
   cursos?: { id: number; curso: { nivel?: { nombre: string }; anio?: { nombre: string }; division?: { nombre: string }; turno?: { nombre: string } } }[];
 }
@@ -18,7 +21,7 @@ export const AlumnosPage: React.FC = () => {
   const [showInactivos, setShowInactivos] = useState(false);
   const [modal, setModal] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
-  const [form, setForm] = useState({ apellido: '', nombre: '', dni: '', fechaNacimiento: '', direccion: '', telefono: '', email: '' });
+  const [form, setForm] = useState({ apellido: '', nombre: '', dni: '', fechaNacimiento: '', direccion: '', contacto1Nombre: '', contacto1Tel: '', contacto2Nombre: '', contacto2Tel: '', contacto3Nombre: '', contacto3Tel: '' });
   const fileRef = useRef<HTMLInputElement>(null);
 
   const { data: alumnos } = useQuery({
@@ -39,8 +42,8 @@ export const AlumnosPage: React.FC = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['alumnos'] }),
   });
 
-  const openNew = () => { setEditId(null); setForm({ apellido: '', nombre: '', dni: '', fechaNacimiento: '', direccion: '', telefono: '', email: '' }); setModal(true); };
-  const openEdit = (a: Alumno) => { setEditId(a.id); setForm({ apellido: a.apellido, nombre: a.nombre, dni: a.dni || '', fechaNacimiento: a.fechaNacimiento?.slice(0, 10) || '', direccion: a.direccion || '', telefono: a.telefono || '', email: a.email || '' }); setModal(true); };
+  const openNew = () => { setEditId(null); setForm({ apellido: '', nombre: '', dni: '', fechaNacimiento: '', direccion: '', contacto1Nombre: '', contacto1Tel: '', contacto2Nombre: '', contacto2Tel: '', contacto3Nombre: '', contacto3Tel: '' }); setModal(true); };
+  const openEdit = (a: Alumno) => { setEditId(a.id); setForm({ apellido: a.apellido, nombre: a.nombre, dni: a.dni || '', fechaNacimiento: a.fechaNacimiento?.slice(0, 10) || '', direccion: a.direccion || '', contacto1Nombre: a.contacto1Nombre || '', contacto1Tel: a.contacto1Tel || '', contacto2Nombre: a.contacto2Nombre || '', contacto2Tel: a.contacto2Tel || '', contacto3Nombre: a.contacto3Nombre || '', contacto3Tel: a.contacto3Tel || '' }); setModal(true); };
 
   const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -64,7 +67,8 @@ export const AlumnosPage: React.FC = () => {
 
   const handleExport = () => {
     if (!alumnos) return;
-    const data = [['Apellido', 'Nombre', 'DNI'], ...alumnos.map(a => [a.apellido, a.nombre, a.dni || ''])];
+    const data = [['Apellido', 'Nombre', 'DNI', 'Contacto 1', 'Tel 1', 'Contacto 2', 'Tel 2', 'Contacto 3', 'Tel 3'],
+      ...alumnos.map(a => [a.apellido, a.nombre, a.dni || '', a.contacto1Nombre || '', a.contacto1Tel || '', a.contacto2Nombre || '', a.contacto2Tel || '', a.contacto3Nombre || '', a.contacto3Tel || ''])];
     const ws = XLSX.utils.aoa_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Alumnos');
@@ -146,10 +150,17 @@ export const AlumnosPage: React.FC = () => {
                 <div className="login-field"><label className="login-label">Fecha Nac.</label><input className="login-input" type="date" value={form.fechaNacimiento} onChange={e => setForm({ ...form, fechaNacimiento: e.target.value })} /></div>
               </div>
               <div className="login-field"><label className="login-label">Dirección</label><input className="login-input" value={form.direccion} onChange={e => setForm({ ...form, direccion: e.target.value })} /></div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <div className="login-field"><label className="login-label">Teléfono</label><input className="login-input" value={form.telefono} onChange={e => setForm({ ...form, telefono: e.target.value })} /></div>
-                <div className="login-field"><label className="login-label">Email</label><input className="login-input" type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
-              </div>
+              <hr style={{ margin: '8px 0', border: 'none', borderTop: '1px solid var(--color-border)' }} />
+              {[1, 2, 3].map(n => {
+                const nombreKey = `contacto${n}Nombre` as keyof typeof form;
+                const telKey = `contacto${n}Tel` as keyof typeof form;
+                return (
+                  <div key={n} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 8 }}>
+                    <div className="login-field"><label className="login-label">Contacto {n} - Nombre</label><input className="login-input" value={form[nombreKey] || ''} onChange={e => setForm({ ...form, [nombreKey]: e.target.value })} /></div>
+                    <div className="login-field"><label className="login-label">Contacto {n} - Teléfono</label><input className="login-input" value={form[telKey] || ''} onChange={e => setForm({ ...form, [telKey]: e.target.value })} /></div>
+                  </div>
+                );
+              })}
             </div>
             <div className="modal-footer">
               <button className="btn-secondary" onClick={() => setModal(false)}>Cancelar</button>

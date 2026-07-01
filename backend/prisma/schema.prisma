@@ -235,8 +235,12 @@ model Alumno {
   nombre          String
   fechaNacimiento DateTime?
   direccion       String?
-  telefono        String?
-  email           String?
+  contacto1Nombre String?
+  contacto1Tel    String?
+  contacto2Nombre String?
+  contacto2Tel    String?
+  contacto3Nombre String?
+  contacto3Tel    String?
   activo          Boolean          @default(true)
   cursos          CursoAlumno[]
   notas           Nota[]
